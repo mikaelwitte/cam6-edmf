@@ -872,9 +872,10 @@ module advance_clubb_core_module
     real( kind = core_rknd ) :: Lscale_max
 
     real( kind = core_rknd ) :: newmu
+  
+    logical :: do_edmf
 
     !----- Begin Code -----
-
     ! Sanity checks
     if ( clubb_at_least_debug_level( 1 ) ) then
 
@@ -1933,37 +1934,66 @@ module advance_clubb_core_module
       !#######################################################################
       !##################### CALL EDMF DIAGNOSTIC PLUMES #####################
       !#######################################################################
-      nup=10
-      call init_random_seed
-      ! MKW 2020-02-10 Call edmf here -- idea is that we want to do it BEFORE mean field is advanced. May be problematic since not sure if pblh is set yet
-      call edmf( gr%nz,   dt,          gr%zt,      gr%dzt,      &
-               p_in_Pa,   exner,       nup,        um,    vm,   &
-               thm,       thlm, thlm_zm,  thvm,    rtm, rtm_zm, &
-               ustar,     wpthlp_sfc,  wprtp_sfc,  pblh,  rcm,  & ! ustar and pblh are not computed until end of timestep...
-               mf_dry_a,  mf_moist_a,  mf_dry_w,   mf_moist_w,                &
-               mf_dry_qt, mf_moist_qt, mf_dry_thl, mf_moist_thl,              &
-               mf_dry_u,  mf_moist_u,  mf_dry_v,   mf_moist_v,   mf_moist_qc, &
-               s_ae,      s_aw,        s_awthl,    s_awqt,       s_awql,      &
-               s_awqi,    s_awu,       s_awv,      mf_thlflx,    mf_qtflx  )
+      do_edmf=.true.
+      if (do_edmf==.true.) then
+         nup=10
+         call init_random_seed
+         ! MKW 2020-02-10 Call edmf here -- idea is that we want to do it BEFORE mean field is advanced. May be problematic since not sure if pblh is set yet
+         call edmf( gr%nz,   dt,          gr%zt,      gr%dzt,      &
+                  p_in_Pa,   exner,       nup,        um,    vm,   &
+                  thm,       thlm, thlm_zm,  thvm,    rtm, rtm_zm, &
+                  ustar,     wpthlp_sfc,  wprtp_sfc,  pblh,  rcm,  & ! ustar and pblh are not computed until end of timestep...
+                  mf_dry_a,  mf_moist_a,  mf_dry_w,   mf_moist_w,                &
+                  mf_dry_qt, mf_moist_qt, mf_dry_thl, mf_moist_thl,              &
+                  mf_dry_u,  mf_moist_u,  mf_dry_v,   mf_moist_v,   mf_moist_qc, &
+                  s_ae,      s_aw,        s_awthl,    s_awqt,       s_awql,      &
+                  s_awqi,    s_awu,       s_awv,      mf_thlflx,    mf_qtflx  )
 
-! MKW TODO: do we need s_awql, s_awqi? clear yet.
-      ! pass EDMF turbulent advection term as CLUBB explicit forcing term
-      rtm_forc_mf(1) = 0.!rtm_forcing(2)
-      thlm_forc_mf(1) = 0.!thlm_forcing(2)
-      do k=2, gr%nz
-        rtm_forc_mf(k) = -  invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
-                        (rho_ds_zm(k) * (s_awqt(k) - s_aw(k)*rtm_zm(k)) - &
-                         rho_ds_zm(k-1) * (s_awqt(k-1) - s_aw(k-1)*rtm_zm(k-1)))
-        thlm_forc_mf(k) = -  invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
-                         (rho_ds_zm(k) * (s_awthl(k) - s_aw(k)*thlm_zm(k)) - &
-                          rho_ds_zm(k-1) * (s_awthl(k-1) - s_aw(k-1)*thlm_zm(k-1)))
-      end do
-      !print *,'s_awqt:',s_awqt
-      !print *,'s_aw:',s_aw
-      !print *,'thlm_zm:',thlm_zm
-! MKW TODO: update rcm and cloud_frac?
-      !rcm
-      !cf
+         ! MKW TODO: do we need to couple s_awql, s_awqi to CLUBB? clear yet.
+         ! pass EDMF turbulent advection term as CLUBB explicit forcing term
+         rtm_forc_mf(1) = 0.!rtm_forcing(2)
+         thlm_forc_mf(1) = 0.!thlm_forcing(2)
+         do k=2, gr%nz
+           rtm_forc_mf(k) = -  invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
+                           (rho_ds_zm(k) * (s_awqt(k) - s_aw(k)*rtm_zm(k)) - &
+                            rho_ds_zm(k-1) * (s_awqt(k-1) - s_aw(k-1)*rtm_zm(k-1)))
+           thlm_forc_mf(k) = -  invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
+                            (rho_ds_zm(k) * (s_awthl(k) - s_aw(k)*thlm_zm(k)) - &
+                             rho_ds_zm(k-1) * (s_awthl(k-1) - s_aw(k-1)*thlm_zm(k-1)))
+           rcm(k) = rcm(k)*s_ae(k)+mf_moist_a(k)*mf_moist_qc(k)
+           cloud_frac(k)  = cloud_frac(k)*s_ae(k) +mf_moist_a(k)
+         end do
+         !print *,'s_awqt:',s_awqt
+         !print *,'s_aw:',s_aw
+         !print *,'thlm_zm:',thlm_zm
+      else
+         mf_dry_a(:) = 0.
+         mf_moist_a(:) = 0.
+         mf_dry_w(:) = 0.
+         mf_moist_w(:) = 0.
+         mf_dry_qt(:) = 0.
+         mf_moist_qt(:) = 0.
+         mf_dry_thl(:) = 0.
+         mf_moist_thl(:) = 0.
+         mf_dry_u(:) = 0.
+         mf_moist_u(:) = 0.
+         mf_dry_v(:) = 0.
+         mf_moist_v(:) = 0.
+         mf_moist_qc(:) = 0.
+         s_ae(:) = 0.
+         s_aw(:) = 0.
+         s_awthl(:) = 0.
+         s_awqt(:) = 0.
+         s_awql(:) = 0.
+         s_awqi(:) = 0.
+         s_awu(:) = 0.
+         s_awv(:) = 0.
+         mf_thlflx(:) = 0.
+         mf_qtflx(:) = 0.
+
+         rtm_forc_mf(:)=0.
+         thlm_forc_mf(:)=0.
+      end if
 
       !#######################################################################
       !############## ADVANCE PROGNOSTIC VARIABLES ONE TIMESTEP ##############
