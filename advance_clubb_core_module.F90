@@ -1641,7 +1641,7 @@ module advance_clubb_core_module
 
       thvm = thlm + ep1 * thv_ds_zt * rtm &
                   + ( Lv/(Cp*exner) - ep2 * thv_ds_zt ) * rcm
-      thm  = thlm +  Lv * rcm / Cp ! MKW added; consistent with thlm2T_in_K
+      thm  = thlm +  Lv * rcm / (Cp*exner) ! MKW added; consistent with thlm2T_in_K
 
       !----------------------------------------------------------------
       ! Compute tke (turbulent kinetic energy)
