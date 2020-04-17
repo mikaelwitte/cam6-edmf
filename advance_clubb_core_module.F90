@@ -872,7 +872,7 @@ module advance_clubb_core_module
     real( kind = core_rknd ) :: Lscale_max
 
     real( kind = core_rknd ) :: newmu
-  
+
     logical :: do_edmf
 
     !----- Begin Code -----
@@ -1951,13 +1951,13 @@ module advance_clubb_core_module
 
          ! MKW TODO: do we need to couple s_awql, s_awqi to CLUBB? clear yet.
          ! pass EDMF turbulent advection term as CLUBB explicit forcing term
-         rtm_forc_mf(1) = 0.!rtm_forcing(2)
-         thlm_forc_mf(1) = 0.!thlm_forcing(2)
+         rtm_forc_mf(1) = rtm_forcing(1)
+         thlm_forc_mf(1) = thlm_forcing(1)
          do k=2, gr%nz
-           rtm_forc_mf(k) = -  invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
+           rtm_forc_mf(k) = rtm_forcing(k) - invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
                            (rho_ds_zm(k) * (s_awqt(k) - s_aw(k)*rtm_zm(k)) - &
                             rho_ds_zm(k-1) * (s_awqt(k-1) - s_aw(k-1)*rtm_zm(k-1)))
-           thlm_forc_mf(k) = -  invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
+           thlm_forc_mf(k) = thlm_forcing(k) - invrs_rho_ds_zt(k) * gr%invrs_dzt(k) * &
                             (rho_ds_zm(k) * (s_awthl(k) - s_aw(k)*thlm_zm(k)) - &
                              rho_ds_zm(k-1) * (s_awthl(k-1) - s_aw(k-1)*thlm_zm(k-1)))
            rcm(k) = rcm(k)*s_ae(k)+mf_moist_a(k)*mf_moist_qc(k)
