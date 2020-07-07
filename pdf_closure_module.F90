@@ -1658,6 +1658,8 @@ module pdf_closure_module
       w_1,          & ! Mean of w (1st PDF component)             [m/s]
       w_2             ! Mean of w (2nd PDF component)             [m/s]
 
+   logical fix_mixt ! MKW 2020-07-06: added flag to ensure that CLUBB still calculates mixt_frac when we want it to
+
   !-----------------------------------------------------------------------
     !----- Begin Code -----
 
@@ -1670,32 +1672,36 @@ module pdf_closure_module
       ! is negative skewness of w (Sk_w < 0 because w'^3 < 0),
       ! 0.5 < mixt_frac < 1, and the 1st PDF component has greater weight than
       ! does the 2nd PDF component.
-      ! if ( abs( Skw ) <= 1e-5_core_rknd ) then
-      !    mixt_frac = one_half
-      ! else
-      !    mixt_frac = one_half * ( one - Skw/ &
-      !       sqrt( 4.0_core_rknd*( one - sigma_sqd_w )**3 + Skw**2 ) )
-      ! endif
-      ! MKW down the rabbit hole we go. Hardwiring CLUBB to use only one Gaussian.
-      mixt_frac = one
+      fix_mixt = .false.
+      if (fix_mixt) then
+        ! MKW down the rabbit hole we go. Hardwiring CLUBB to use only one Gaussian.
+        mixt_frac = one
+      else
+        if ( abs( Skw ) <= 1e-5_core_rknd ) then
+           mixt_frac = one_half
+        else
+           mixt_frac = one_half * ( one - Skw/ &
+              sqrt( 4.0_core_rknd*( one - sigma_sqd_w )**3 + Skw**2 ) )
+        endif
+      endif
 
       ! Clip mixt_frac, 1-mixt_frac, to avoid dividing by zero
       ! Formula for mixt_frac_max_mag =
-      ! 1 - ( 1/2 * ( 1 - Skw_max/sqrt( 4*( 1 - sigma_sqd_w )^3 + Skw_max^2 ) ) )
-      ! Where sigma_sqd_w is fixed at 0.4.
-      mixt_frac = min( max( mixt_frac, one-mixt_frac_max_mag ), mixt_frac_max_mag )
+  ! 1 - ( 1/2 * ( 1 - Skw_max/sqrt( 4*( 1 - sigma_sqd_w )^3 + Skw_max^2 ) ) )
+  ! Where sigma_sqd_w is fixed at 0.4.
+  mixt_frac = min( max( mixt_frac, one-mixt_frac_max_mag ), mixt_frac_max_mag )
 
       ! The normalized mean of w for Gaussian "plume" 1 is w_1_n.  It's value
       ! will always be greater than 0.  As an example, a value of 1.0 would
       ! indicate that the actual mean of w for Gaussian "plume" 1 is found
-      ! 1.0 standard deviation above the overall mean for w.
-      w_1_n = sqrt( ( (one-mixt_frac)/mixt_frac )*(one-sigma_sqd_w) )
-      ! The normalized mean of w for Gaussian "plume" 2 is w_2_n.  It's value
-      ! will always be less than 0.  As an example, a value of -0.5 would
-      ! indicate that the actual mean of w for Gaussian "plume" 2 is found
-      ! 0.5 standard deviations below the overall mean for w.
-      w_2_n = -sqrt( ( mixt_frac/(one-mixt_frac) )*(one-sigma_sqd_w) )
-      ! The mean of w for Gaussian "plume" 1 is w_1.
+  ! 1.0 standard deviation above the overall mean for w.
+  w_1_n = sqrt( ( (one-mixt_frac)/mixt_frac )*(one-sigma_sqd_w) )
+  ! The normalized mean of w for Gaussian "plume" 2 is w_2_n.  It's value
+  ! will always be less than 0.  As an example, a value of -0.5 would
+  ! indicate that the actual mean of w for Gaussian "plume" 2 is found
+  ! 0.5 standard deviations below the overall mean for w.
+  w_2_n = -sqrt( ( mixt_frac/(one-mixt_frac) )*(one-sigma_sqd_w) )
+! The mean of w for Gaussian "plume" 1 is w_1.
       w_1 = wm + sqrt_wp2*w_1_n
       ! The mean of w for Gaussian "plume" 2 is w_2.
       w_2 = wm + sqrt_wp2*w_2_n
