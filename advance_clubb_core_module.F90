@@ -3824,7 +3824,7 @@ subroutine edmf( nz,  dt,   zt,  dzt,   p,  iexner,                     &
        enddo
 
        ! get Poisson P(dz/L0)
-       call Poisson( 1, nup, 2, nz, entf, enti)
+       call Poisson( 1, nz, 1, nup, entf, enti)
 
        ! entrainent: Ent=Ent0/dz*P(dz/L0)
        do i=1,nup
