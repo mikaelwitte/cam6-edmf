@@ -1939,7 +1939,7 @@ module advance_clubb_core_module
          nup=10
          call init_random_seed
          ! MKW 2020-02-10 Call edmf here -- idea is that we want to do it BEFORE mean field is advanced. May be problematic since not sure if pblh is set yet
-         call edmf( gr%nz,   dt,          gr%zt,      gr%dzt,      &
+         call integrate_mf( gr%nz,   dt,          gr%zt,      gr%dzt,      &
                   p_in_Pa,   exner,       nup,        um,    vm,   &
                   thm,       thlm, thlm_zm,  thvm,    rtm, rtm_zm, &
                   ustar,     wpthlp_sfc,  wprtp_sfc,  pblh,  rcm,  & ! ustar and pblh are not computed until end of timestep...
@@ -1963,9 +1963,6 @@ module advance_clubb_core_module
            rcm(k) = rcm(k)*s_ae(k)+mf_moist_a(k)*mf_moist_qc(k)
            cloud_frac(k)  = cloud_frac(k)*s_ae(k) +mf_moist_a(k)
          end do
-         !print *,'s_awqt:',s_awqt
-         !print *,'s_aw:',s_aw
-         !print *,'thlm_zm:',thlm_zm
       else
          mf_dry_a(:) = 0.
          mf_moist_a(:) = 0.
@@ -1991,8 +1988,8 @@ module advance_clubb_core_module
          mf_thlflx(:) = 0.
          mf_qtflx(:) = 0.
 
-         rtm_forc_mf(:)=0.
-         thlm_forc_mf(:)=0.
+         rtm_forc_mf(:)=rtm_forcing(:)
+         thlm_forc_mf(:)=thlm_forcing(:)
       end if
 
       !#######################################################################
@@ -3646,24 +3643,22 @@ module advance_clubb_core_module
 !  Eddy-diffusivity mass-flux routine                                                                               !
 ! =============================================================================== !
 
-subroutine edmf( nz,  dt,   zt,  dzt,   p,  iexner,                     &
-               nup,    u,    v,   th, thl, thl_zm, thv, qt, qt_zm,      &
-               ust, wthl,  wqt, pblh,  qc,                              &
-         ! outputs updraft properties for diagnostics
-               dry_a,   moist_a,                                        &
-               dry_w,   moist_w,                                        &
-               dry_qt,  moist_qt,                                       &
-               dry_thl, moist_thl,                                      &
-               dry_u,   moist_u,                                        &
-               dry_v,   moist_v,                                        &
-                        moist_qc,                                       &
-          ! outputs - variables needed for solver
-               ae, aw, awthl, awqt, awql, awqi, awu, awv,               &
-               thlflx, qtflx )
+subroutine integrate_mf( nz,  dt,   zt,  dzt,   p,  iexner,             & ! input
+               nup,    u,    v,   th, thl, thl_zm, thv, qt, qt_zm,      & ! input
+               ust, wthl,  wqt, pblh,  qc,                              & ! input
+               dry_a,   moist_a,                                        & ! output - plume diagnostics
+               dry_w,   moist_w,                                        & ! output - plume diagnostics
+               dry_qt,  moist_qt,                                       & ! output - plume diagnostics
+               dry_thl, moist_thl,                                      & ! output - plume diagnostics
+               dry_u,   moist_u,                                        & ! output - plume diagnostics
+               dry_v,   moist_v,                                        & ! output - plume diagnostics
+                        moist_qc,                                       & ! output - plume diagnostics
+               ae, aw, awthl, awqt, awql, awqi, awu, awv,               & ! output - variables needed for solver
+               thlflx, qtflx )                                            ! output - diagnosed fluxes *BEFORE* mean field update
 
 ! Original author: Marcin Kurowski, JPL
 ! Modified heavily by Mikael Witte, UCLA/JPL for implementation in CESM2/E3SM
-! Last modified 18 Feb. 2020
+! Last modified 12 Aug. 2020
 
 !
 ! Variables needed for solver
@@ -3886,12 +3881,8 @@ subroutine edmf( nz,  dt,   zt,  dzt,   p,  iexner,                     &
            vn   = v(k-1)  *(1.-entexpu) + upv  (k-1,i)*entexpu
 
            iexh = (1.e5 / p(k))**(rair/cpair) ! MKW NOTE: why not just use CLUBB exner??
-           call condensation_edmf(qtn, thln, p(k), iexh, &
+           call condensation_mf(qtn, thln, p(k), iexh, &
                                  thvn, qcn, thn, qln, qin)
-
-!Condensation within updrafts, input/output at full levels:
-!               call condensation_edmf(qtn, thln, p(k), (iexn(k-1)+iexn(k))/2., &
-!                                     thvn, qcn, thn, qln, qin)
 
            b=gravit*(0.5*(thvn+upthv(k-1,i))/thv(k-1)-1.)
            !b=mapl_grav*(thvn/thv(k-1)-1.)
@@ -4015,15 +4006,15 @@ subroutine edmf( nz,  dt,   zt,  dzt,   p,  iexner,                     &
        !sflx(kts)  = 0.
        qtflx(1) = 0.
 
-       print*,'max(1-ae)=',maxval(1.-ae)
+       ! print*,'max(1-ae)=',maxval(1.-ae)
 
      end if  ! ( wthv > 0.0 )
 
 
-end subroutine edmf
+end subroutine integrate_mf
 
 
-subroutine condensation_edmf( qt, thl, p, iex, thv, qc, th, ql, qi)
+subroutine condensation_mf( qt, thl, p, iex, thv, qc, th, ql, qi)
 !
 ! zero or one condensation for edmf: calculates thv and qc
 !
